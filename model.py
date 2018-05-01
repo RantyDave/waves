@@ -61,6 +61,31 @@ class VoxelData:
             self.data.tofile(f)
 
 
+class PixelData:
+    z_plane = 0.04
+
+    def __init__(self, size, scale):
+        self.data = np.empty(size, dtype=np.float32)
+        self.size = size
+        self.scale = scale
+
+    def real_world_coords(self, x, y):
+        return x * self.scale, y * self.scale, PixelData.z_plane
+
+    def fill_from(self, funcs):
+        for y in range(0, self.size[1]):
+            for x in range(0, self.size[0]):
+                passed_coords = self.real_world_coords(x, y)
+                result = 0
+                for func in funcs:
+                    result += func(passed_coords)
+                self.data[y, x] = result
+
+    def save(self, filename):
+        with open(filename + '.raw', 'wb') as f:
+            self.data.tofile(f)
+
+
 class SoundPressureField:
     v_sound = 343.0
     max_pressure = 0.2
@@ -84,29 +109,29 @@ class SoundPressureField:
         diff = coords - self.location
         distance_squared = diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2]
         distance = math.sqrt(distance_squared)
-        distance_due_to_delay = self.offset() * SoundPressureField.v_sound
 
         # bail out now if we're going to have a division by zero
         if distance_squared == 0:
             return SoundPressureField.max_pressure
 
         # calculate phase difference due to distance (in radians)
-        phase = ((distance + distance_due_to_delay) / self.wavelength) * 2 * math.pi
+        phase = (distance / self.wavelength) * 2 * math.pi
         rtn = (math.sin(phase) * (self.amplitude / distance_squared))
         return max(SoundPressureField.min_pressure, min(rtn, SoundPressureField.max_pressure))
 
 
 # actual thing is 0.064m across, we're using 0.001m voxels
-voxels = VoxelData((64, 64, 64), scale=0.001)
+# voxels = VoxelData((64, 64, 64), scale=0.001)
+pixels = PixelData((64, 64), scale=0.001)
 
 pressure_fields = list()
 for x in range(0, 4):
     for y in range(0, 4):
-        pressure_fields.append(SoundPressureField((0.008 + x*0.016, 0.008 + y*0.016, 0), 40000, 0.00001, x * 0.00001))
+        pressure_fields.append(SoundPressureField((0.008 + x*0.016, 0.008 + y*0.016, 0), 40000, 0.00001))
 
 functions = list()
 for field in pressure_fields:
     functions.append(field.pressure_at)
 
-voxels.fill_from(functions)
-voxels.save('pressure_field')
+pixels.fill_from(functions)
+pixels.save('pressure_field')
